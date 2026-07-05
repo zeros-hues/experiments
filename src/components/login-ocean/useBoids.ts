@@ -28,6 +28,7 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { deriveSeed, mulberry32 } from '../../lib/login-ocean/dateState';
+import { getStagingVolume } from './staging';
 
 export interface BoidsOptions {
   /** Total fish alive today (hero included), from getOceanDayState. */
@@ -84,16 +85,19 @@ export function createBoidsSim({
   const swarmCount = Math.max(fishCount - 1, 0);
   const rng = mulberry32(deriveSeed(seed, 700_001));
 
-  // Staging volume: dense years spread wide, sparse late-year fish
-  // concentrate closer to the camera. Placement density changes with the
-  // date; the camera (Part 5) never does.
-  const yearFrac = Math.min(Math.max(swarmCount / (totalDays - 1 || 1), 0), 1);
-  const spread = 0.45 + 0.55 * Math.sqrt(yearFrac);
-  const boundsCenter = new THREE.Vector3(0, 0, -9 + (1 - yearFrac) * 2.5);
+  // Staging volume from staging.ts: dense years spread wide, sparse
+  // late-year fish concentrate closer to the camera. Placement density
+  // changes with the date; the camera (CameraRig.tsx) never does.
+  const volume = getStagingVolume(fishCount, totalDays, sizeScale);
+  const boundsCenter = new THREE.Vector3(
+    volume.center.x,
+    volume.center.y,
+    volume.center.z
+  );
   const boundsHalf = new THREE.Vector3(
-    11 * spread + 2.5,
-    4.5 * spread + 1.5,
-    5.5 * spread + 1.5
+    volume.half.x,
+    volume.half.y,
+    volume.half.z
   );
 
   const positions = new Float32Array(swarmCount * 3);
@@ -148,12 +152,11 @@ export function createBoidsSim({
     boundsHalf.y * 0.35,
     boundsHalf.z * 0.35
   );
-  const heroCenter = boundsCenter.clone();
-  // Small heroes drift slightly ahead of the swarm; giants retreat into
-  // the fog proportionally to their size so the late-year whale reads as
-  // a distant leviathan instead of clipping the camera. Part 5's staging
-  // tunes this against the fixed camera.
-  heroCenter.z += 1.5 - (sizeScale - 1) * 1.2;
+  const heroCenter = new THREE.Vector3(
+    volume.heroCenter.x,
+    volume.heroCenter.y,
+    volume.heroCenter.z
+  );
 
   const hero = {
     position: heroCenter.clone(),
